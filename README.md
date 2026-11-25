@@ -74,3 +74,7 @@ autoApplyOnJoin  = false    # true = 进服自动同步
 ```
 
 产物：`build/libs/snapsync-2.0.0.jar`
+
+## 许可证
+
+MIT
