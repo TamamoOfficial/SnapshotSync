@@ -1,0 +1,24 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="All Rights Reserved"
+
+[[mods]]
+modId="snapsync"
+version="2.0.0"
+displayName="SnapshotSync"
+authors="Place_Bo"
+description='''Content-addressed pack snapshots: the server publishes what it is running, and clients fetch only the files whose SHA-256 differs.'''
+
+[[dependencies.snapsync]]
+    modId="neoforge"
+    type="required"
+    versionRange="[21.1.0,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.snapsync]]
+    modId="minecraft"
+    type="required"
+    versionRange="[1.21.1,1.22)"
+    ordering="NONE"
+    side="BOTH"
