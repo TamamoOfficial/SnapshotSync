@@ -1,0 +1,22 @@
+{
+  "modsync.button.update": "Update",
+  "modsync.button.update.tip": "Download required mods from the server",
+  "modsync.button.download": "Download Server Mods",
+  "modsync.button.download.tip": "Can't join due to mod mismatch? Click to download the missing mods",
+  "modsync.checking.title": "Checking server mods...",
+  "modsync.confirm.title": "Download Server Mods",
+  "modsync.confirm.prompt": "The server provides %s mods.\n\nThis will add them to the current game instance.\nTo play other content, use a fresh client copy and click this button.",
+  "modsync.confirm.yes": "Confirm & Download",
+  "modsync.confirm.no": "Cancel",
+  "modsync.confirm.close": "Close",
+  "modsync.confirm.downloading": "Downloading, please wait...",
+  "modsync.confirm.done": "Downloaded %s mods.\nRestart the game for them to take effect.",
+  "modsync.confirm.failed": "Download failed: %s",
+  "modsync.error.title": "Could not fetch mod list",
+  "modsync.error.no_address": "Could not determine the server address. Join the server once, then try again.",
+  "modsync.progress.title": "Downloading server mods",
+  "modsync.progress.cancel": "Cancel",
+  "modsync.progress.cancelled": "Cancelled after installing %s.",
+  "modsync.progress.summary": "Installed %s · skipped %s · failed %s",
+  "modsync.progress.files": "File %s / %s"
+}

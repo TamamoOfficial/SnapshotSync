@@ -1,80 +1,114 @@
-# SnapshotSync
+# ModSync
 
-服务端把模组/配置打包发布，客户端只下载真正改动过的文件。
+服务端把指定模组下发给客户端；玩家在多人游戏界面点「下载服务端模组」，
+一键补齐缺失的 jar，重启游戏即可进入。
 
-NeoForge 1.21.1 · Minecraft 1.21.1
+- 目标环境：**Fabric + Minecraft 26.1.2 + Java 25**
+- 依赖：fabric-loader / fabric-api
 
-## 功能
+---
 
-- **只下变化** — 按 SHA-256 比对，内容没变的文件不重复传输
-- **并行下载** — 大文件分块多连接，小文件之间也并行
-- **两种打包模式** — 空闲时打包 / 固定间隔打包，改配置切换
-- **任意目录** — 可打包游戏根目录下任何文件夹（`mods`、`config`、`kubejs`、`patchouli_books`、`shaderpacks` 等）
-- **无变化不重发** — 内容一致时完全不发布，客户端零流量
-- **失败可回滚** — 替换前备份，失败自动还原
-- **中英双语**
-
-## 使用
-
-服务端和客户端都把 jar 放进 `mods/`。
-
-玩家在多人游戏界面点「更新」按钮，检查并下载，完成后重启客户端即可。
+## 目录结构
 
 ```
-/snapsync status     查看状态
-/snapsync rebuild    立即重新打包
-/snapsync port       查看下载端口
-/snapsync pull       客户端开始同步
+mod更新同步/
+├─ ModSync/                     源码
+│  ├─ src/main/java/com/modsync/
+│  │  ├─ ModSync.java           服务端入口
+│  │  ├─ ModSyncConfig.java     配置读写
+│  │  ├─ server/DownloadServer  下载服务（自定义 TCP 协议）
+│  │  ├─ net/ModSyncProtocol    线上协议定义
+│  │  ├─ net/DownloadInfoNet    配置阶段下发下载地址
+│  │  └─ client/                客户端界面与下载器
+│  ├─ src/main/resources/
+│  │  ├─ fabric.mod.json
+│  │  └─ assets/modsync/lang/   中英文
+│  └─ build/libs/modsync-1.0.0.jar
+│
+├─ server1/                     测试服务器
+│  ├─ start.bat
+│  ├─ mods/
+│  └─ config/modsync/           ★ 要下发的模组放这里
+│
+├─ 构建ModSync.bat
+└─ .gradle-home-dists/          Gradle 9.8.2（离线可用）
 ```
 
-## 配置
+---
 
-`config/snapsync-common.toml`：
+## 端口
 
-```toml
-# 打包模式：IDLE（空闲时）| INTERVAL（固定间隔）
-packMode = "IDLE"
+下载服务**独立占用一个端口，绝不碰游戏端口**：
 
-# INTERVAL 模式
-intervalMinutes = 30        # 间隔分钟数
-buildOnStart    = true      # 启动时先打一次
+| 用途 | 端口 | 说明 |
+|---|---|---|
+| 游戏 | 25565 | 由 zstdnet 或 MC 自己监听 |
+| 下载 | **25580** | ModSync，与游戏隔离 |
 
-# IDLE 模式
-idleDelaySeconds        = 60     # 空置多久开始打包
-minTpsForSnapshot       = 19.0   # TPS 低于此值推迟
-snapshotCooldownSeconds = 300    # 两次打包最小间隔
+`config/modsync.json`：
 
-# 打包范围
-includeFolders = ["mods", "config", "kubejs", "resourcepacks"]
-excludeMods    = []         # 不下发给客户端的 jar 文件名
-
-# 下载
-downloadPortOffset     = 1      # 下载端口 = 游戏端口 + 此值
-fixedDownloadPort      = 0      # >0 则用绝对端口
-maxParallelConnections = 4      # 并行连接数
-chunkSizeKb            = 512    # 分块大小
-
-# 其他
-rehashEveryBuild = false    # true = 禁用哈希缓存
-autoApplyOnJoin  = false    # true = 进服自动同步
+```json
+{
+  "multiplex": false,
+  "listenPort": 25580,
+  "gameTargetPort": 0,
+  "publicHost": "",
+  "publicPort": 50255,
+  "clientAddress": "",
+  "clientPort": 0
+}
 ```
 
-## 注意
+- `listenPort` 服务端本地监听端口
+- `publicPort` 告诉客户端该连哪个**外部**端口（FRP 的远程端口）
+- 客户端配置里用 `clientPort` 填外部端口
 
-- **首次部署仍需手动装完整客户端包。** 缺少会阻断连接的模组时，客户端会被拦在协商阶段，走不到下载那一步。
-- **更新 mod 后必须重启游戏**，jar 无法在运行中替换。
-- Windows 已验证；Linux 代码已适配但未实机验证；Android 不支持自动安装。
+---
+
+## 为什么用自定义协议而不是 HTTP
+
+SakuraFrp 等隧道服务只转发裸 TCP，**会拦截 HTTP 请求**并直接返回它自己的 501 页面，
+导致下载请求永远到不了服务器。因此改用 `MODSYNC1` 开头的自定义协议，不会被拦。
+
+协议格式见 `ModSyncProtocol` 类注释。
+
+---
+
+## 配置阶段的坑（重要）
+
+Fabric 的 `ConfigurationTask` **必须在 `start()` 里调用 `completeTask()`**，
+否则配置阶段永不结束，玩家会卡在"加入世界中"。
+
+这是本项目踩过的最隐蔽的坑：任务发了包但没标记完成，客户端一直等。
+
+---
 
 ## 构建
 
-需要 JDK 21。
+双击 `构建ModSync.bat`，产物 `ModSync/build/libs/modsync-1.0.0.jar`。
 
-```bash
-./gradlew build
-```
+## 部署
 
-产物：`build/libs/snapsync-2.0.1.jar`
+| 目标 | 路径 |
+|---|---|
+| 服务端 | `D:\Server\26.1.2\mods\modsync-1.0.0-fabric-26.1.2.jar` |
+| 客户端 | `.minecraft\versions\26.1.2-Fabric 0.19.5\mods\` 同名 |
 
-## 许可证
+## 控制下发哪些模组
 
-MIT
+只增删 `config/modsync/` 里的 jar：
+
+- 放进去 → 客户端能下到
+- 删掉 → 不再下发
+
+**注意**：只放客户端能独立运行的模组。服务端专用（`servux`、`minimotd`、`spark`）
+和依赖缺失的（如 `syncmatica` 需要 `litematica`，若玩家没有会崩）不要放。
+
+---
+
+## 注意事项
+
+- 26.1.2 文字颜色必须用 **8 位 ARGB**（`0xFFFFFFFF`），6 位会因 alpha=0 不显示
+- `Screen.resize()` 只调 `repositionElements()`，自定义界面需 override 它重建控件
+- 多行文本要按 `\n` 拆开逐行绘制，否则换行符会渲染成方块乱码
+- 重启服务器前确认旧的 java 进程已退出，否则 `FAILED TO BIND TO PORT`
