@@ -1,0 +1,22 @@
+{
+  "modsync.button.update": "更新",
+  "modsync.button.update.tip": "从服务器下载所需的模组",
+  "modsync.button.download": "下载服务端模组",
+  "modsync.button.download.tip": "服务器模组不匹配无法进入？点击下载缺失的模组",
+  "modsync.checking.title": "正在查询服务器模组…",
+  "modsync.confirm.title": "下载服务端模组",
+  "modsync.confirm.prompt": "服务器提供了 %s 个模组。\n\n这会把这些模组添加到当前游戏版本。\n如需游玩其他内容，请用新的客户端副本点击本按钮。",
+  "modsync.confirm.yes": "确定并下载",
+  "modsync.confirm.no": "取消",
+  "modsync.confirm.close": "关闭",
+  "modsync.confirm.downloading": "正在下载，请稍候…",
+  "modsync.confirm.done": "已下载 %s 个模组。\n请重新启动游戏使其生效。",
+  "modsync.confirm.failed": "下载失败：%s",
+  "modsync.error.title": "无法获取模组列表",
+  "modsync.error.no_address": "无法确定服务器地址。请先加入一次服务器，再尝试下载。",
+  "modsync.progress.title": "正在下载服务端模组",
+  "modsync.progress.cancel": "取消下载",
+  "modsync.progress.cancelled": "已取消，已安装 %s 个。",
+  "modsync.progress.summary": "新装 %s · 跳过 %s · 失败 %s",
+  "modsync.progress.files": "文件 %s / %s"
+}
