@@ -48,6 +48,56 @@ public final class DeferredApplier {
         return Path.of(SnapshotSync.DIR, "pending");
     }
 
+    /**
+     * Cached answer for {@link #hasPendingUpdate()}.
+     *
+     * <p>The plan lives on disk, but asking the filesystem about it every tick is not free: on
+     * Windows {@code Files.isRegularFile} opens the file to read its attributes, which allocates
+     * a {@link java.io.FileDescriptor} - plus the native-stat {@code long[]} behind it - on every
+     * call. A 60 s JFR allocation profile of a running client charged roughly 400 MB/s, 46.5% of
+     * all allocation, to this one query at 20 Hz. The answer is therefore held here and only
+     * re-read where it can actually change.
+     */
+    private static volatile boolean pendingCache;
+
+    /**
+     * True once {@link #pendingCache} reflects what is on disk.
+     *
+     * <p>Lets the very first query (a plan left by a previous session, seen from the main menu)
+     * still be correct without reintroducing a per-tick stat: it costs one filesystem call per
+     * JVM, not one per tick.
+     */
+    private static volatile boolean pendingCacheValid;
+
+    /**
+     * True when an install plan is staged and waiting for the next exit.
+     *
+     * <p>Called from the client tick, so it must not touch the filesystem: after the first call
+     * this is a plain field read. The cache is updated at the only points where the answer can
+     * change - joining a world ({@code ClientHooks#onLoggingIn}), a staging pass ({@link #stage})
+     * and {@link #clearPending()}. Do not reintroduce a {@code Files} call here; see
+     * {@link #pendingCache} for the measurement that made this necessary.
+     */
+    public static boolean hasPendingUpdate() {
+        if (!pendingCacheValid) {
+            refreshPendingCache();
+        }
+        return pendingCache;
+    }
+
+    /**
+     * Re-reads the plan file and updates the cache.
+     *
+     * <p>Only needed where the state can change behind our back - chiefly on joining a world, so
+     * that a plan written by an earlier session, or one deleted by a helper that has since
+     * finished, is picked up. Code in this class writes the cache directly instead of calling
+     * this, because it already knows what it just did.
+     */
+    public static void refreshPendingCache() {
+        pendingCache = Files.isRegularFile(planFile());
+        pendingCacheValid = true;
+    }
+
     private static Path applierSource() {
         return Path.of(SnapshotSync.DIR, "Applier.java");
     }
@@ -114,6 +164,10 @@ public final class DeferredApplier {
         // The plan is the contract between the game and the helper.
         Files.write(planPath, planLines, StandardCharsets.UTF_8);
 
+        // Written, so the answer is known without asking the filesystem later.
+        pendingCache = true;
+        pendingCacheValid = true;
+
         extractApplier();
         writePlanSummary(planLines);
 
@@ -164,6 +218,8 @@ public final class DeferredApplier {
      * case - which is exactly how an earlier version silently left jars uninstalled.
      */
     public static synchronized boolean startHelper() {
+        // Low frequency (staging and shutdown only), so it reads the plan directly: the helper
+        // may already have deleted it, and starting a second one would be wrong.
         if (helperStarted || !Files.isRegularFile(planFile())) {
             return false;
         }
@@ -253,11 +309,6 @@ public final class DeferredApplier {
         return startHelper();
     }
 
-    /** True when files are staged and waiting for the next exit. */
-    public static boolean hasPendingUpdate() {
-        return Files.isRegularFile(planFile());
-    }
-
     /** Outcome of the last deferred install, for the status command. */
     public static String lastResult() {
         Path log = statusPath();
@@ -274,8 +325,11 @@ public final class DeferredApplier {
     public static void clearPending() {
         try {
             Files.deleteIfExists(planFile());
-        } catch (IOException ignored) {
-            // best effort
+            pendingCache = false;
+            pendingCacheValid = true;
+        } catch (IOException e) {
+            // Best effort - but re-read rather than lie about what is still on disk.
+            refreshPendingCache();
         }
     }
 }

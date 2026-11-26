@@ -38,6 +38,10 @@ public final class ClientOfferHandler {
     }
 
     public static void onOffer(SnapshotOfferPayload offer) {
+        // A join-time offer is one of the moments the staged state can have moved on (the helper
+        // for the previous session may have installed and deleted the plan). Once per join.
+        DeferredApplier.refreshPendingCache();
+
         if (offer.isEmpty()) {
             // Server has nothing published, or the client was already current.
             pending = null;

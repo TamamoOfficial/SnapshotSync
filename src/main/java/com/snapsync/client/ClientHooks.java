@@ -35,6 +35,21 @@ public final class ClientHooks {
         announcedPending = false;
     }
 
+    /**
+     * Re-read the staged-plan state once per join.
+     *
+     * <p>{@link DeferredApplier#hasPendingUpdate()} is a cached field precisely so the tick
+     * handler below does not stat the plan file 20 times a second (that query allocated
+     * ~400 MB/s of {@code FileDescriptor}s in a JFR profile). A join is one of the few moments
+     * the answer can have changed since the last look: a helper from a previous session may
+     * have installed the plan and deleted it, or a plan may still be waiting. One stat per join
+     * keeps the cache honest and costs nothing.
+     */
+    @SubscribeEvent
+    public static void onLoggingIn(ClientPlayerNetworkEvent.LoggingIn event) {
+        DeferredApplier.refreshPendingCache();
+    }
+
     /** Tell the player once, shortly after joining, that a restart will finish the update. */
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
@@ -46,6 +61,7 @@ public final class ClientHooks {
             return;
         }
 
+        // Cached field read - no filesystem access on the tick path.
         if (DeferredApplier.hasPendingUpdate()) {
             announcedPending = true;
             mc.player.sendSystemMessage(Component.translatable("snapsync.chat.staged_pending"));
@@ -85,6 +101,10 @@ public final class ClientHooks {
         Minecraft mc = Minecraft.getInstance();
         var pending = ClientOfferHandler.get();
         String local = LocalState.rootHash();
+
+        // Explicit user request: report what is on disk now, not the tick-time cache. This is
+        // rare by definition, so the extra stat costs nothing globally.
+        DeferredApplier.refreshPendingCache();
 
         line(mc, Component.translatable("snapsync.status.client_header"));
         line(mc, Component.translatable("snapsync.status.applied_root",
